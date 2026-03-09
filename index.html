@@ -3558,6 +3558,7 @@ function saveEditUser(){
   saveState();
   notif.innerHTML='<div class="notif-item notif-ok">✅ تم الحفظ! الحماية مفعّلة الآن.</div>';
   toast(t('toast_saved'),'ok');Snd.save();
+  updateLoginScreenUI(); // تحديث شاشة الدخول فوراً
   setTimeout(()=>{closeModal('edit-user-modal');renderUsers();},1400);
 }
 
@@ -3587,6 +3588,7 @@ function deleteCredentialsPrompt(){
   DB.r('saved_creds');
   DB.r('ecdz_sec_lock');
   saveState();
+  updateLoginScreenUI(); // تحديث شاشة الدخول فوراً
   toast('✅ تم حذف بيانات الدخول. الدخول مفتوح الآن.','ok');Snd.save();
   renderUsers();
 }
@@ -3596,10 +3598,22 @@ function deleteCredentialsPrompt(){
    ================================================================ */
 let _recCountdownTimer=null;
 
+// تحديث شاشة الدخول فوراً عند تغيير إعدادات الحماية
+function updateLoginScreenUI(){
+  const authEnabled=DB.g('auth_enabled',false);
+  const lgnFields=document.getElementById('lgn-fields');
+  const lgnReset=document.getElementById('lgn-reset-btn');
+  if(lgnFields)lgnFields.style.display=authEnabled?'block':'none';
+  if(lgnReset)lgnReset.style.display=authEnabled?'block':'none';
+}
+
 function openLoginRecovery(){
+  // إعادة تحميل المستخدمين من localStorage دائماً
+  const stored=DB.g('users',null);
+  if(stored&&Array.isArray(stored))State.users=stored;
   const admin=State.users.find(u=>u.role==='admin')||State.users[0];
   if(!admin?.secretQuestion&&!admin?.emergencyCode){
-    alert('لم يتم إعداد خيارات الاسترجاع. تواصل مع الدعم الفني.');return;
+    toast('⚠️ لم يتم إعداد خيارات الاسترجاع من داخل التطبيق','wa');return;
   }
   // تحقق من حالة القفل
   const lock=DB.g('ecdz_sec_lock',{phase:'question',qAttempts:0,eAttempts:0,lockedUntil:null});
