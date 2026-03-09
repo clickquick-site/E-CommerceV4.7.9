@@ -784,7 +784,7 @@ select option{background:var(--card);color:var(--tx)}
 </div>
 
 <!-- ===== MODAL: استرجاع كلمة المرور (على شاشة الدخول) ===== -->
-<div class="modal-overlay" id="login-recovery-modal" style="z-index:10000;display:none">
+<div class="modal-overlay" id="login-recovery-modal" style="z-index:10000">
   <div class="modal" style="max-width:400px">
     <div class="modal-hdr">
       <h3>🔑 استرجاع كلمة المرور</h3>
@@ -1896,6 +1896,7 @@ function doLogin(){
 
   if(u){
     State.currentUser=u;
+    DB.r('ecdz_login_attempts'); // إعادة ضبط العداد عند النجاح
     if(authEnabled&&document.getElementById('lgn-remember')?.checked){
       DB.s('saved_creds',{u:u.username,p:u.password});
     } else {
@@ -1907,8 +1908,17 @@ function doLogin(){
     }
     showApp();Snd.ok();
   } else {
+    const attempts=(DB.g('ecdz_login_attempts',0))+1;
+    DB.s('ecdz_login_attempts',attempts);
+    const remaining=5-attempts;
     const err=document.getElementById('lgn-err');
-    if(err){err.style.color='';err.textContent=t('lgn_err');err.style.display='block';Snd.err();setTimeout(()=>err.style.display='none',3000);}
+    if(attempts>=5){
+      DB.r('ecdz_login_attempts');
+      if(err){err.style.color='#ffa502';err.textContent='🔒 5 محاولات فاشلة — انتقل لاسترجاع كلمة المرور';err.style.display='block';}
+      setTimeout(()=>openLoginRecovery(),600);
+    } else {
+      if(err){err.style.color='';err.textContent=`❌ ${t('lgn_err')} — المحاولات المتبقية: ${remaining}`;err.style.display='block';Snd.err();setTimeout(()=>err.style.display='none',3000);}
+    }
   }
 }
 
@@ -3608,17 +3618,17 @@ function updateLoginScreenUI(){
 }
 
 function openLoginRecovery(){
-  // إعادة تحميل المستخدمين من localStorage دائماً
   const stored=DB.g('users',null);
   if(stored&&Array.isArray(stored))State.users=stored;
   const admin=State.users.find(u=>u.role==='admin')||State.users[0];
+  const lgnErr=document.getElementById('lgn-err');
   if(!admin?.secretQuestion&&!admin?.emergencyCode){
-    toast('⚠️ لم يتم إعداد خيارات الاسترجاع من داخل التطبيق','wa');return;
+    if(lgnErr){lgnErr.style.color='#ffa502';lgnErr.textContent='⚠️ لم يتم إعداد خيارات الاسترجاع بعد';lgnErr.style.display='block';setTimeout(()=>{lgnErr.style.display='none';lgnErr.style.color='';},3000);}
+    return;
   }
-  // تحقق من حالة القفل
   const lock=DB.g('ecdz_sec_lock',{phase:'question',qAttempts:0,eAttempts:0,lockedUntil:null});
-  document.getElementById('login-recovery-modal').style.display='flex';
-  // إعادة ضبط الحقول
+  const modal=document.getElementById('login-recovery-modal');
+  modal.classList.add('open');
   ['rec-answer','rec-emergency','rec-new-pass','rec-confirm-pass'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('rec-notif').innerHTML='';
   if(lock.lockedUntil&&Date.now()<lock.lockedUntil){
@@ -3637,7 +3647,7 @@ function openLoginRecovery(){
 }
 
 function closeLoginRecovery(){
-  document.getElementById('login-recovery-modal').style.display='none';
+  document.getElementById('login-recovery-modal').classList.remove('open');
   if(_recCountdownTimer)clearInterval(_recCountdownTimer);
 }
 
